@@ -1,6 +1,6 @@
 import React from 'react';
-import { useState } from "react";
-import { useQuery } from 'react-query';
+import {useState, useEffect } from "react";
+import { useQuery, useQueryClient } from 'react-query';
 import { PostDetail } from "./PostDetail.tsx";
 
 export interface IPost {
@@ -9,8 +9,8 @@ export interface IPost {
   title: string;
   body: string;
 }
-
-async function fetchPosts() {
+const maxPostPage = 10;
+async function fetchPosts(pageNum: number) {
   const response = await fetch(
     "https://jsonplaceholder.typicode.com/posts?_limit=10&_page=0"
   );
@@ -21,11 +21,28 @@ function Posts() {
   console.log("Rendering PostDetail");
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedPost, setSelectedPost] = useState<IPost | null>(null);
+  
+  const queryClient = useQueryClient();
 
   // replace with useQuery
-  const {data, isLoading} = useQuery<IPost[]>('posts', fetchPosts);
-
-  if(isLoading) return <div/>
+  const {data, isLoading, isError} = useQuery<IPost[]>(
+    ['posts',currentPage],
+    ()=>fetchPosts(currentPage),
+    {
+      staleTime: 2000, //staleTime 2초로 설정 => fetch data는 2초간 fresh
+      keepPreviousData: true
+    }
+  );
+  useEffect(()=>{
+    if(currentPage <= maxPostPage - 2){
+      const nextPage = currentPage + 1;
+      queryClient.prefetchQuery(['posts',nextPage], () =>
+        fetchPosts(nextPage)
+        );
+    }
+  })
+  if(isError) return <h3>ERROR!!</h3>;
+  if(isLoading) return <h3>Loading...</h3>;
   return (
     <>
       <ul>
@@ -40,11 +57,17 @@ function Posts() {
         ))}
       </ul>
       <div className="pages">
-        <button disabled onClick={() => {}}>
+        <button
+          disabled={currentPage <= 0}
+          onClick={() => setCurrentPage((prev) => prev - 1)}
+        >
           Previous page
         </button>
         <span>Page {currentPage + 1}</span>
-        <button disabled onClick={() => {}}>
+        <button
+          disabled={currentPage >= maxPostPage - 1}
+          onClick={() => setCurrentPage((prev) => prev + 1)}
+        >
           Next page
         </button>
       </div>
